@@ -1,1 +1,142 @@
+Set coordinates and metric:
+In[122]:= coord={t,r,θ,ϕ}
+n=Length[coord];
+metric=DiagonalMatrix[{-(1-2M/r),1/(1-2M/r),r^2,r^2Sin[θ]^2}];
+metric//MatrixForm
+Out[122]= {t,r,θ,ϕ}
+Out[125]//MatrixForm= (-1+(2 M)/r	0	0	0
+0	1/(1-(2 M)/r)	0	0
+0	0	r^2	0
+0	0	0	r^2 Sin[θ]^2
 
+)
+
+
+Pull diffgeo.m package:
+In[129]:= SetDirectory["/Users/janaingram/Documents/Mathematica"]
+<<diffgeo.m
+Out[129]= /Users/janaingram/Documents/Mathematica
+
+
+Set metric sign - this will dictate spacelike vs. timelike:
+In[126]:= metricsign=-1;
+
+
+Calculate Christoffel symbols:
+In[131]:= inversemetric=Simplify[Inverse[metric]];
+inversemetric//MatrixForm
+Out[132]//MatrixForm= (r/(2 M-r)	0	0	0
+0	1-(2 M)/r	0	0
+0	0	1/r^2	0
+0	0	0	Csc[θ]^2/r^2
+
+)
+In[133]:= christoffel:=christoffel=Simplify[Table[(1/2)*Sum[(inversemetric[[i,s]])*(D[metric[[s,j]],coord[[k]]]+D[metric[[s,k]],coord[[j]]]-D[metric[[j,k]],coord[[s]]]),{s,1,n}],{i,1,n},{j,1,n},{k,1,n}]];
+In[134]:= listchristoffel:=Table[If[UnsameQ[christoffel[[i,j,k]],0],{ToString[Γ[i,j,k]],christoffel[[i,j,k]]}],{i,1,n},{j,1,n},{k,1,j}];
+TableForm[Partition[DeleteCases[Flatten[listchristoffel],Null],2],TableSpacing->{2,2}]
+Out[135]//TableForm= Γ[1, 2, 1]	-(M/(2 M r-r^2))
+Γ[2, 1, 1]	(M (-2 M+r))/r^3
+Γ[2, 2, 2]	M/(2 M r-r^2)
+Γ[2, 3, 3]	2 M-r
+Γ[2, 4, 4]	(2 M-r) Sin[θ]^2
+Γ[3, 3, 2]	1/r
+Γ[3, 4, 4]	-Cos[θ] Sin[θ]
+Γ[4, 4, 2]	1/r
+Γ[4, 4, 3]	Cot[θ]
+
+
+
+Geodesic equations:
+In[136]:= geodesic:=geodesic=Simplify[Table[-Sum[christoffel[[i,j,k]]coord[[j]]'coord[[k]]',{j,1,n},{k,1,n}],{i,1,n}]]
+listgeodesic:=Table[{"d/dτ"ToString[coord[[i]]'],"=",geodesic[[i]]},{i,1,n}]
+TableForm[listgeodesic,TableSpacing->{2}]
+Out[138]//TableForm= d/dτ t'	=	(2 M r^′ t^′)/(2 M r-r^2)
+d/dτ r'	=	(-M r^2 (r^′)^2+(-2 M+r)^2 (M (t^′)^2-r^3 ((θ^′)^2+Sin[θ]^2 (ϕ^′)^2)))/((2 M-r) r^3)
+d/dτ θ'	=	-((2 r^′ θ^′)/r)+Cos[θ] Sin[θ] (ϕ^′)^2
+d/dτ ϕ'	=	-((2 (r^′+r Cot[θ] θ^′) ϕ^′)/r)
+
+
+
+Solve the geodesic equations:
+In[139]:= computeSoln[maxτi_,ivsi_,icsi_]:=Block[{ivs,ics,i,χ,tmp,soln},
+ics=icsi;
+ivs=Join[{χ},ivsi];
+tmp=metric;
+tmp=tmp/.Table[coord[[i]]->ics[[i]],{i,0,n}];
+tmp=ivs.(tmp.ivs);
+χslv=Solve[tmp==uinvar,χ];
+ivs[[1]]=Last[χ/.χslv];
+deq=Table[coord[[i]]''[τ]==(geodesic[[i]]/.Join[Table[coord[[i]]'->coord[[i]]'[τ],{i,1,n}],Table[coord[[i]]->coord[[i]][τ],{i,1,n}]]),{i,1,n}];
+deq=Join[deq,Table[coord[[i]]'[0]==ivs[[i]],{i,1,n}],Table[coord[[i]][0]==ics[[i]],{i,1,n}]];
+soln=NDSolve[deq,coord,{τ,0,maxτi}];soln]
+uinvar=-1;
+sphslnToCartsln[soln_]:=Block[{xs,ys,zs},xs=r[τ]Sin[θ[τ]]Cos[ϕ[τ]]/.soln;
+ys=r[τ]Sin[θ[τ]]Sin[ϕ[τ]]/.soln;zs=r[τ]Cos[θ[τ]]/.soln;{xs,ys,zs}]
+udotu[solni_,τval_]:=Block[{xα,uα},xα=Table[coord[[i]][τ]/.solni,{i,1,n}]//Flatten;uα=D[xα,τ];
+xα=xα/.τ->τval;uα=uα/.τ->τval;uα.((metric/.Table[coord[[i]]->xα[[i]],{i,1,n}]).uα)]
+coordlist[τin_]:=Table[ToString[coord[[i]]]<>"="<>{ToString[coord[[i]][τin]/.soln//First]},{i,1,n}]
+
+Set initial conditions and mass:
+In[144]:= maxτ=750;
+ivs={0,0,.088};
+ics={0,6.5,π/2,0};
+M=1;
+
+View solutions:
+In[148]:= soln=computeSoln[maxτ,ivs,ics]
+Out[148]= {{t->InterpolatingFunction[Domain: {{0.,750.}}
+Output: scalar
+
+],r->InterpolatingFunction[Domain: {{0.,750.}}
+Output: scalar
+
+],θ->InterpolatingFunction[Domain: {{0.,750.}}
+Output: scalar
+
+],ϕ->InterpolatingFunction[Domain: {{0.,750.}}
+Output: scalar
+
+]}}
+In[149]:= Plot[Evaluate[Table[coord[[i]][τ]/.soln,{i,1,n}]],{τ,0,maxτ},PlotStyle->Table[Hue[(i-1)/n],{i,1,n}],PlotLegends->coord,AxesLabel->{"τ","Coordinate"}]
+Out[149]= 	t
+	r
+	θ
+	ϕ
+
+
+In[150]:= xyzsoln=sphslnToCartsln[soln];
+horizpl=PolarPlot[2,{θ,0,2π},PlotStyle->Hue[0],DisplayFunction->Identity];
+ParametricPlot[Evaluate[{xyzsoln[[1]],xyzsoln[[2]]}//Flatten],{τ,0,maxτ},AspectRatio->1,DisplayFunction->Identity]
+Show[%,horizpl,DisplayFunction->$DisplayFunction]
+Join[{"Final Coordinates:"},coordlist[maxτ]]//TableForm
+Join[{{"","","","u·u values"}},Table[{"τ=",ToString[i],"->"udotu[soln,i]},{i,0,maxτ,maxτ/5}]]//TableForm
+Out[152]= 
+Out[153]= 
+Out[154]//TableForm= Final Coordinates:
+t=895.185
+r=14.0799
+θ=1.5708
+ϕ=28.1107
+
+
+Out[155]//TableForm= 			u·u values
+τ=	0	-1. ->	
+τ=	150	-1. ->	
+τ=	300	-1. ->	
+τ=	450	-1. ->	
+τ=	600	-1. ->	
+τ=	750	-1. ->	
+
+
+3-dimensional trajectory:
+In[156]:= maxτ=2000;
+ivs={-.08,.035,.0359};
+ics={0,10,π/4,.2};
+xyzsoln=sphslnToCartsln[computeSoln[maxτ,ivs,ics]];
+spphoriz=SphericalPlot3D[{2,EdgeForm[]},{θ,0,π},{ϕ,0,2π},DisplayFunction->Identity];
+angle=ParametricPlot3D[Evaluate[Re[xyzsoln]//Flatten],{τ,0,maxτ},AxesLabel->{x,y,z},DisplayFunction->Identity];
+edge=ParametricPlot3D[Evaluate[Re[xyzsoln]//Flatten],{τ,0,maxτ},AxesLabel->{x,y,z},ViewPoint->{2,1.6,0},DisplayFunction->Identity];
+Show[angle,spphoriz,DisplayFunction->$DisplayFunction,PlotRange->{{-28,30},{-28,30},{-28,30}}]
+Show[edge,spphoriz,DisplayFunction->$DisplayFunction,PlotRange->{{-28,30},{-28,30},{-28,30}}]
+Out[163]= 
+Out[164]= 
